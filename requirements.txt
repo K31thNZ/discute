@@ -4,3 +4,4 @@ torchaudio
 langchain
 streamlit
 openai-whisper
+langchain-groq
