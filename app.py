@@ -5,8 +5,8 @@ from prompt_managements import pm
 
 # Constants
 DEFAULT_VOICE = "af_heart"
-MODEL_CONTEXT = "gemma2-9b-it"
-MODEL_CHAT = "mistral-saba-24b"
+MODEL_CONTEXT = "openai/gpt-oss-20b"
+MODEL_CHAT = "openai/gpt-oss-120b"
 VOICES = {
         "American Woman 1": "af_heart",
         "American Woman 2": "af_bella",
