@@ -1,6 +1,9 @@
 import streamlit as st
 from main import transcribe_audio, generate_response, generate_audio
 from prompt_managements import pm
+import io
+import numpy as np
+import soundfile as sf
 
 # Constants
 DEFAULT_VOICE = "af_heart"
@@ -45,13 +48,69 @@ def init_session_state() -> None:
         st.session_state.difficulty = "Intermediate"
 
 
+def audio_to_wav_bytes(audio_data, sample_rate=24000):
+    """Convert audio data (numpy array or bytes) to WAV bytes for Streamlit playback"""
+    try:
+        # If audio is already bytes, try to use directly
+        if isinstance(audio_data, bytes):
+            # Check if it's already a valid WAV
+            if audio_data[:4] == b'RIFF':
+                return audio_data
+            # If it's raw audio bytes, convert to numpy array
+            try:
+                audio_array = np.frombuffer(audio_data, dtype=np.float32)
+                # Create WAV in memory
+                buffer = io.BytesIO()
+                sf.write(buffer, audio_array, sample_rate, format='WAV')
+                buffer.seek(0)
+                return buffer.read()
+            except:
+                return audio_data
+        
+        # If audio is a numpy array
+        if isinstance(audio_data, np.ndarray):
+            buffer = io.BytesIO()
+            sf.write(buffer, audio_data, sample_rate, format='WAV')
+            buffer.seek(0)
+            return buffer.read()
+        
+        # If audio is a file path
+        if isinstance(audio_data, str):
+            with open(audio_data, 'rb') as f:
+                return f.read()
+        
+        # If audio is a list
+        if isinstance(audio_data, list):
+            audio_array = np.array(audio_data, dtype=np.float32)
+            buffer = io.BytesIO()
+            sf.write(buffer, audio_array, sample_rate, format='WAV')
+            buffer.seek(0)
+            return buffer.read()
+            
+    except Exception as e:
+        st.error(f"Audio conversion error: {str(e)}")
+        return audio_data if isinstance(audio_data, bytes) else b''
+    
+    return audio_data if isinstance(audio_data, bytes) else b''
+
+
 def display_chat_history() -> None:
     """Display the chat history with audio playback"""
     for msg in st.session_state.chat:
         with st.container(border=True):
             role_label = "**🧑 Me**" if msg["role"] == "me" else "**🤖 Assistant**"
             st.write(role_label)
-            st.audio(msg["audio"], format="audio/wav")
+            
+            # Convert and play audio
+            try:
+                audio_bytes = audio_to_wav_bytes(msg["audio"])
+                if audio_bytes:
+                    st.audio(audio_bytes, format="audio/wav")
+                else:
+                    st.warning("No audio data available")
+            except Exception as e:
+                st.error(f"Could not play audio: {str(e)}")
+            
             with st.expander("Show transcript", expanded=False):
                 st.write(f"{msg['content']}")
 
@@ -213,8 +272,12 @@ def main():
                 with st.spinner("Transcribing your voice..."):
                     audio_bytes = audio_value.read()
                     text = transcribe_audio(audio_bytes)
+                
+                # Convert user audio for playback
+                user_audio = audio_to_wav_bytes(audio_bytes)
+                
                 st.session_state.chat.append(
-                    {"role": "me", "content": text, "audio": audio_bytes}
+                    {"role": "me", "content": text, "audio": user_audio}
                 )
 
                 chat_history = format_chat_history()
@@ -230,9 +293,11 @@ def main():
 
                 with st.spinner("Generating audio response..."):
                     audio = generate_audio(ai_response, st.session_state.voice)
+                    # Convert AI audio for playback
+                    ai_audio = audio_to_wav_bytes(audio)
 
                 st.session_state.chat.append(
-                    {"role": "you", "content": ai_response, "audio": audio}
+                    {"role": "you", "content": ai_response, "audio": ai_audio}
                 )
                 st.rerun()
 
